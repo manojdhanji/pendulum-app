@@ -1,0 +1,7 @@
+name: "Pendulum App"
+services:
+  pendulum:
+    build: .
+    container_name: pendulum-app
+    ports:
+      - "8086:80"
