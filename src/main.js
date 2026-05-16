@@ -88,6 +88,7 @@ const controlsAPI = {
         // Reset global values
         gravity = 9.8;
         baseLength = 1;
+        renderer.traceCtx.clearRect(0, 0, renderer.traceCanvas.width, renderer.traceCanvas.height);
 
         // Recreate pendulum(s)
         if (mode === "single") {
@@ -99,7 +100,7 @@ const controlsAPI = {
         updatePeriodDisplay();
         drawSystem();
     },
-    
+
     isRunning: () => running,
 
     setMode: (newMode) => {
@@ -150,6 +151,7 @@ setupUI(singlePendulum, controlsAPI);
 // Layout Manager (MUST be last)
 // -----------------------------
 const layout = new LayoutManager(canvas, () => {
+    renderer.resizeTraceCanvas();
     drawSystem();
 });
 
