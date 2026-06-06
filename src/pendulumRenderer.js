@@ -22,6 +22,11 @@ export class PendulumRenderer {
 
         // Scale: meters -> pixels
         this.lengthScale = 200;
+
+        // Force vector colors (styling only)
+        this.colorDown = "#ffffff";         // mg
+        this.colorRadial = "#4A90E2";       // mg·cosθ and T
+        this.colorTangential = "#F5A623";
     }
 
     // -----------------------------------------------------
@@ -87,51 +92,61 @@ export class PendulumRenderer {
     // -----------------------------------------------------
     // Public: draw one pendulum (single mode)
     // -----------------------------------------------------
-    draw(angle, length) {
-        this.fadeTrace();
+    draw(angle, length, showForces = false, g = 9.8) {
 
         const originX = this.canvas.width / 2;
         const originY = this.originY;
 
-        // Compute bob position ONCE using the correct scale
         const { bobX, bobY } = this.computeBob(originX, originY, angle, length);
 
-        // Draw trace at the exact bob center
-        this.drawTracePoint(bobX, bobY);
+        if (!showForces) {
+            this.fadeTrace();
+            this.drawTracePoint(bobX, bobY);
+            this.ctx.drawImage(this.traceCanvas, 0, 0);
+        }
 
-        // Draw the trace buffer
-        this.ctx.drawImage(this.traceCanvas, 0, 0);
-
-        // Draw the pendulum using the same bob coordinates
         this.drawRod(originX, originY, bobX, bobY);
         this.drawBob(bobX, bobY);
-    }
 
+        if (showForces) {
+            this.drawForces(bobX, bobY, angle);
+            this.drawLegend();
+        }
+    }
 
 
     // -----------------------------------------------------
     // Public: draw multiple pendulums (wave machine)
     // -----------------------------------------------------
-    drawMultiple(pendulums) {
-        this.fadeTrace();
+    drawMultiple(pendulums, showForces = false, g = 9.8) {
 
         const originX = this.canvas.width / 2;
         const originY = this.originY;
 
-        // First pass: draw traces
-        pendulums.forEach(p => {
-            const { bobX, bobY } = this.computeBob(originX, originY, p.angle, p.length);
-            this.drawTracePoint(bobX, bobY);
-        });
+        if (!showForces) {
+            // Running -> fade + update trace
+            this.fadeTrace();
 
-        // Draw the trace buffer
+            pendulums.forEach(p => {
+                const { bobX, bobY } = this.computeBob(originX, originY, p.angle, p.length);
+                this.drawTracePoint(bobX, bobY);
+            });
+        }
+
+        // Always draw the trace buffer ONCE
         this.ctx.drawImage(this.traceCanvas, 0, 0);
 
-        // Second pass: draw pendulums
+        // Draw pendulums
         pendulums.forEach(p => {
             const { bobX, bobY } = this.computeBob(originX, originY, p.angle, p.length);
+
             this.drawRod(originX, originY, bobX, bobY);
             this.drawBob(bobX, bobY);
+
+            if (showForces) {
+                this.drawForces(bobX, bobY, p.angle);
+                this.drawLegend();
+            }
         });
     }
 
@@ -150,5 +165,117 @@ export class PendulumRenderer {
     resizeTraceCanvas() {
         this.traceCanvas.width = this.canvas.width;
         this.traceCanvas.height = this.canvas.height;
+    }
+
+    drawForces(bobX, bobY, angle) {
+        // -----------------------------
+        // 1. Physics-only calculations
+        // -----------------------------
+        const forceScale = 40;
+
+        // Unit vectors
+        const sinA = Math.sin(angle);
+        const cosA = Math.cos(angle);
+
+        // Radial direction (along rod)
+        const radX = sinA;
+        const radY = cosA;
+
+        // Tangential direction (perpendicular to rod)
+        const tanX = cosA;
+        const tanY = -sinA;
+
+        // Components (normalized)
+        const mgDown = {
+            x: 0,
+            y: forceScale
+        };
+
+        const mgSin = {
+            x: tanX * (-sinA) * forceScale,
+            y: tanY * (-sinA) * forceScale
+        };
+
+        const mgCos = {
+            x: radX * cosA * forceScale,
+            y: radY * cosA * forceScale
+        };
+
+        const tension = {
+            x: -mgCos.x,
+            y: -mgCos.y
+        };
+
+
+        // -----------------------------
+        // 2. Rendering-only (styling)
+        // -----------------------------
+        this.drawArrow(bobX, bobY, bobX + mgDown.x, bobY + mgDown.y, this.colorDown);
+        this.drawArrow(bobX, bobY, bobX + mgSin.x, bobY + mgSin.y, this.colorTangential);
+        this.drawArrow(bobX, bobY, bobX + mgCos.x, bobY + mgCos.y, this.colorRadial);
+        this.drawArrow(bobX, bobY, bobX + tension.x, bobY + tension.y, this.colorRadial);
+    }
+
+    drawArrow(x1, y1, x2, y2, color) {
+        const ctx = this.ctx;
+
+        // Draw main line
+        ctx.strokeStyle = color;
+        ctx.fillStyle = color;
+        ctx.lineWidth = 2;
+
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+
+        // Arrowhead size
+        const headLength = 10;
+
+        // Compute angle of the line
+        const angle = Math.atan2(y2 - y1, x2 - x1);
+
+        // Arrowhead points
+        const hx1 = x2 - headLength * Math.cos(angle - Math.PI / 6);
+        const hy1 = y2 - headLength * Math.sin(angle - Math.PI / 6);
+
+        const hx2 = x2 - headLength * Math.cos(angle + Math.PI / 6);
+        const hy2 = y2 - headLength * Math.sin(angle + Math.PI / 6);
+
+        ctx.beginPath();
+        ctx.moveTo(x2, y2);
+        ctx.lineTo(hx1, hy1);
+        ctx.lineTo(hx2, hy2);
+        ctx.closePath();
+        ctx.fill();
+    }
+
+    drawLegend() {
+        const ctx = this.ctx;
+        ctx.save();
+
+        const x = this.canvas.width - 180;
+        let y = 20;
+
+        ctx.font = "14px sans-serif";
+        ctx.textAlign = "left";
+
+        const drawItem = (label, color) => {
+            // Color box
+            ctx.fillStyle = color;
+            ctx.fillRect(x, y - 10, 12, 12);
+
+            // Text
+            ctx.fillStyle = "white";
+            ctx.fillText(label, x + 20, y);
+            y += 22;
+        };
+
+        drawItem("mg (down)", this.colorDown);
+        drawItem("mg·cosθ (radial)", this.colorRadial);
+        drawItem("Tension (opposite radial)", this.colorRadial);
+        drawItem("mg·sinθ (tangential)", this.colorTangential);
+
+        ctx.restore();
     }
 }

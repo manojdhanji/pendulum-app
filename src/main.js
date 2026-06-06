@@ -52,12 +52,15 @@ function createWaveMachine() {
 // Draw System
 // -----------------------------
 function drawSystem() {
+    const showForces = !running; // paused then show forces
+
     if (mode === "single") {
-        renderer.draw(singlePendulum.angle, singlePendulum.length);
+        renderer.draw(singlePendulum.angle, singlePendulum.length, showForces, gravity);
     } else {
-        renderer.drawMultiple(pendulumArray);
+        renderer.drawMultiple(pendulumArray, showForces, gravity);
     }
 }
+
 
 // -----------------------------
 // Update period and frequency display based on current base length and gravity
@@ -74,7 +77,10 @@ function updatePeriodDisplay() {
 // Controls API
 // -----------------------------
 const controlsAPI = {
-    pause: () => { running = false; },
+    pause: () => { 
+        running = false;
+        drawSystem();
+    },
     resume: () => {
         if (!running) {
             running = true;
@@ -159,7 +165,10 @@ const layout = new LayoutManager(canvas, () => {
 // Animation loop
 // -----------------------------
 function loop(timestamp) {
-    if (!running) return;
+    if (!running) {
+        drawSystem();
+        return;
+    }
 
     if (lastTime == null) {
         lastTime = timestamp;
